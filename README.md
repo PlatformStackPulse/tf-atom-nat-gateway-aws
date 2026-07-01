@@ -3,9 +3,41 @@
 [![CI](https://github.com/PlatformStackPulse/tf-atom-nat-gateway-aws/actions/workflows/ci.yml/badge.svg)](https://github.com/PlatformStackPulse/tf-atom-nat-gateway-aws/actions/workflows/ci.yml)
 ![Terraform](https://img.shields.io/badge/terraform-%3E%3D1.6.0-blueviolet)
 
-## Purpose
+Terraform atom that provisions a single AWS NAT Gateway so private-subnet
+workloads can reach the internet for egress-only traffic. It follows the
+tf-label convention: naming, tagging, and the `enabled` toggle are inherited
+from the [tf-label](https://github.com/PlatformStackPulse/tf-label) context.
 
-Terraform atom: AWS NAT Gateway - enables outbound internet for private subnets.
+## Features
+
+- **Public or private NAT** — `connectivity_type` selects between a public NAT
+  Gateway (with an Elastic IP `allocation_id`) or a private one.
+- **tf-label naming & tagging** — the gateway `Name` tag and all other tags are
+  derived from the tf-label `id`/`tags`, keeping resources consistently named
+  across your fleet.
+- **Toggle with `enabled`** — set `enabled = false` to create no resources at
+  all (outputs return `null`), so the module can be composed conditionally.
+- **Egress outputs** — exposes the gateway `id`, `public_ip`, and `private_ip`
+  for wiring into route tables and downstream modules.
+
+## Usage
+
+```hcl
+module "nat_gateway" {
+  source = "git::https://github.com/PlatformStackPulse/tf-atom-nat-gateway-aws.git?ref=v1.0.0"
+
+  namespace = "eg"
+  stage     = "prod"
+  name      = "egress"
+
+  # Required: the subnet the NAT gateway lives in (usually a public subnet).
+  subnet_id = aws_subnet.public.id
+
+  # For a public NAT gateway, attach an Elastic IP allocation.
+  allocation_id     = aws_eip.nat.id
+  connectivity_type = "public"
+}
+```
 
 ## Module Documentation
 
@@ -69,3 +101,18 @@ Terraform atom: AWS NAT Gateway - enables outbound internet for private subnets.
 | <a name="output_private_ip"></a> [private\_ip](#output\_private\_ip) | Private IP of the NAT gateway |
 | <a name="output_public_ip"></a> [public\_ip](#output\_public\_ip) | Public IP of the NAT gateway |
 <!-- END_TF_DOCS -->
+
+## Tests
+
+Unit tests use the Terraform test framework with a mocked AWS provider, so no
+real cloud resources are created. They assert on plan-known values only
+(the tf-label `id`, resource counts, and input pass-throughs).
+
+```bash
+# Unit tests (mocked provider, no AWS credentials required)
+terraform init -backend=false
+terraform test -test-directory=tests/unit
+
+# Integration tests (real provider, requires AWS credentials)
+terraform test -test-directory=tests/integration
+```
